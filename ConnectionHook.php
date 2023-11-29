@@ -2,8 +2,8 @@
 
 namespace Illuminate\Database;
 
-
-use App\PDOProxy\PDOProxyPool;
+use Support\PDOProxy\PDOPRoxyPoolMap;
+use Worker\Built\JsonRpc\JsonRpcClient;
 
 class ConnectionHook extends Connection
 {
@@ -19,7 +19,11 @@ class ConnectionHook extends Connection
             if ($this->pretending()) {
                 return [];
             }
-            return PDOProxyPool::instance()->get()->query($query, $bindings, []);
+            return JsonRpcClient::getInstance()->call(
+                PDOPRoxyPoolMap::$pools[$this->getDatabaseName()]->range()->name,
+                'prepare',
+                $query, $bindings
+            );
         });
     }
 }
