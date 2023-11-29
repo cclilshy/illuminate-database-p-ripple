@@ -1,12 +1,18 @@
 <?php
 
-namespace Illuminate\Database;
+namespace PRipple\Illuminate\Database;
 
+use Core\Map\CollaborativeFiberMap;
+use Core\Map\CoroutineMap;
+use Facade\JsonRpc;
 use Support\PDOProxy\PDOPRoxyPoolMap;
-use Worker\Built\JsonRpc\JsonRpcClient;
 
 class ConnectionHook extends Connection
 {
+    public const MODE_ORIGINAL = 1;
+    public const MODE_PROXY    = 2;
+    public int $mode = ConnectionHook::MODE_PROXY;
+
     /**
      * @param string $query
      * @param array  $bindings
@@ -19,11 +25,16 @@ class ConnectionHook extends Connection
             if ($this->pretending()) {
                 return [];
             }
-            return JsonRpcClient::getInstance()->call(
-                PDOPRoxyPoolMap::$pools[$this->getDatabaseName()]->range()->name,
-                'prepare',
-                $query, $bindings
-            );
+            if ($this->mode === ConnectionHook::MODE_ORIGINAL) {
+                return parent::select($query, $bindings, $useReadPdo);
+            } elseif (!CoroutineMap::current()) {
+                return parent::select($query, $bindings, $useReadPdo);
+            } else {
+                return JsonRpc::call(
+                    [PDOPRoxyPoolMap::$pools[$this->getName()]->rangeRpc(), 'prepare'],
+                    $query, $bindings, []
+                );
+            }
         });
     }
 }
